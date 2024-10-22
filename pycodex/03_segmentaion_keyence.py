@@ -1,12 +1,12 @@
 import logging
 
-from pycodex.segmentation import io_fusion as io
+from pycodex.segmentation import io_keyence as io
 from pycodex.segmentation import mobject as mo
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # parameter ^ #####
-boundary_markers = ["CD45", "NaKATP", "HLA1", "G6PD", "CD45RO", "CD45RA", "CD8", "CD20", "CD31", "CD9_500ms"]
+boundary_markers = ["CD45", "NaKATP", "HLA1", "G6PD", "CD45RO", "CD45RA", "CD8", "CD20", "CD31", "CA9_500ms"]
 internal_markers = ["Ch1Cy1", "VDAC1", "ATP5A", "aSMA"]
 pixel_size_um = 377.5202 / 1000
 scale = True
@@ -15,6 +15,7 @@ interior_threshold = 0.20
 # parameter $ #####
 
 marker_list = boundary_markers + internal_markers
+print(marker_list)
 
 marker_dir = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543/images/final"
 metadata_dict = io.organize_metadata(marker_dir)
