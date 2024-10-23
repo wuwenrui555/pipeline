@@ -1,35 +1,30 @@
 import logging
 
-from pycodex.segmentation import io_keyence as io
-from pycodex.segmentation import mobject as mo
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+from pycodex import io, utils
 
 # parameter ^ #####
-boundary_markers = ["CD45", "NaKATP", "HLA1", "G6PD", "CD45RO", "CD45RA", "CD8", "CD20", "CD31", "CA9_500ms"]
-internal_markers = ["Ch1Cy1", "VDAC1", "ATP5A", "aSMA"]
+marker_dir = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543/images/final"
+output_dir = "/mnt/nfs/home/wenruiwu/projects/shuli_rcc/data/output/segmentation_20241022"
+
+boundary_markers = ["CD45", "NaKATP", "HLA1", "G6PD", "CD8", "CD20", "CD31"]
+internal_markers = ["Ch1Cy1", "aSMA"]
 pixel_size_um = 377.5202 / 1000
 scale = True
 maxima_threshold = 0.075
 interior_threshold = 0.20
 # parameter $ #####
 
-marker_list = boundary_markers + internal_markers
-print(marker_list)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-marker_dir = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543/images/final"
-metadata_dict = io.organize_metadata(marker_dir)
-marker_object = mo.organize_marker_object(metadata_dict, marker_list)
-
-segmentation_dir = "/mnt/nfs/home/wenruiwu/projects/shuli_rcc/data/output/segmentation_20241221"
-mo.marker_object_segmentation_mesmer(
-    segmentation_dir,
-    marker_object,
-    boundary_markers,
-    internal_markers,
-    pixel_size_um,
-    scale,
-    maxima_threshold,
-    interior_threshold,
+metadata_dict = io.organize_metadata_keyence(marker_dir)
+utils.segmentation_mesmer(
+    output_dir=output_dir,
+    metadata_dict=metadata_dict,
+    regions=list(metadata_dict.keys()),
+    boundary_markers=boundary_markers,
+    internal_markers=internal_markers,
+    pixel_size_um=pixel_size_um,
+    scale=scale,
+    maxima_threshold=maxima_threshold,
+    interior_threshold=interior_threshold,
 )
-mo.extract_cell_features(marker_dir, segmentation_dir)
