@@ -6,10 +6,10 @@ from pycodex import io, utils
 
 # parameter ^ #####
 marker_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/data/output/periodontal"
-output_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/output/data/segmentation_20241022_run1"
+output_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/output/data/segmentation_20241022_run2"
 
-boundary_markers = ["HLA-1", "CD31", "E-cadherin", "CD68", "CD3e", "HLA-DR", "CD15"]
-internal_markers = ["DAPI", "a-SMA", "Vimentin"]
+boundary_markers = ["HLA-1", "CD31", "E-cadherin", "CD68", "CD3e", "HLA-DR", "CD15", "Vimentin"]
+internal_markers = ["DAPI", "a-SMA"]
 pixel_size_um = 0.5068164319979996
 scale = True
 maxima_threshold = 0.075
