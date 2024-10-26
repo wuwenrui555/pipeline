@@ -2,7 +2,6 @@ import os
 
 from pycodex import io, utils
 
-
 ########################################################################################################################
 
 marker_dir = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543/images/final"
