@@ -6,28 +6,27 @@ from pycodex import align, io, metadata
 from tqdm import tqdm
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+########################################################################################################################
+
+dst_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/data/Male_WT+KO_36dpi/raw01"
+src_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/data/Male_WT+KO_36dpi/raw02"
+output_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/output/Male_WT+KO_36dpi_demo"
 
 ########################################################################################################################
 
-# images as reference
-dst_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/data/Female_WT+KO_36dpi/raw01"
-# images to be aligned to reference
-src_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/data/Female_WT+KO_36dpi/raw02"
-output_dir = "/mnt/nfs/home/wenruiwu/projects/precious_alignment/output/Female_WT+KO_36dpi"
+# setup GPU
+io.setup_gpu("0,1,2,3")
+
+# load sift parameters
+with open(os.path.join(output_dir, "sift_parameter.pkl"), "rb") as f:
+    data = pkl.load(f)
+logging.info("Parameters loaded")
 
 # get marker list
 dst_metadata_dict = io.organize_metadata_fusion(dst_dir, subfolders=False)
 dst_unique_markers, _, _, _ = metadata.summary_markers(dst_metadata_dict)
 src_metadata_dict = io.organize_metadata_fusion(src_dir, subfolders=False)
 src_unique_markers, _, _, _ = metadata.summary_markers(src_metadata_dict)
-
-########################################################################################################################
-
-# load sift parameters
-with open(os.path.join(output_dir, "sift_parameter.pkl"), "rb") as f:
-    data = pkl.load(f)
-logging.info("Parameters loaded")
 
 all_markers = dst_unique_markers + src_unique_markers
 all_markers_renamed = io.rename_duplicate_markers(all_markers)
