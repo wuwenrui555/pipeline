@@ -1,5 +1,6 @@
 import itertools
 import json
+from typing import Optional
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -52,7 +53,7 @@ def plot_geometries(ax, gdf):
     default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     color_cycle = itertools.cycle(default_colors)
 
-    for i in range(gdf.shape[0]):
+    for i in gdf.index:
         color = next(color_cycle)
         gdf.geometry.loc[[i]].plot(ax=ax, color=color)
     return ax
