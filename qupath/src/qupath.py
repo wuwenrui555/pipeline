@@ -19,6 +19,10 @@ def load_geojson(geojson_path=None, geojson_text=None):
     return gdf
 
 
+########################################################################################################################
+# Buffer
+########################################################################################################################
+
 def add_buffers(gdf, buffer_distance):
     beg_buffers = []
     end_buffers = []
@@ -85,7 +89,7 @@ def merge_lines(i_gdf_line, j_gdf_line):
         return False
 
 
-def merge_objects(gdf_polygons, gdf_lines, buffer_distance=50):
+def merge_buffers(gdf_polygons, gdf_lines, buffer_distance=50):
     gdf_lines_0 = []
     gdf_polygons_0 = []
     gdf_lines = add_buffers(gdf_lines, buffer_distance=buffer_distance)
