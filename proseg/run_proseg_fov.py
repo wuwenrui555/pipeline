@@ -1,11 +1,8 @@
 # %%
 # cargo install proseg@1.1.9
 import logging
-import os
 
-import pandas as pd
 from pycodex import io
-from tqdm import tqdm
 
 import src.proseg as proseg
 
@@ -20,7 +17,7 @@ if __name__ == "__main__":
         path_tx = "/mnt/nfs/storage/CosMX/Indepth_TMA971_section01_v132/AtoMx/flatFiles/Indepth_EBV971_CosMx/Indepth_EBV971_CosMx_tx_file.csv.gz"
         dir_output = "/mnt/nfs/home/wenruiwu/projects/indepth_cosmx_dlbcl/data/output/proseg_fov_cosmx_only_Indepth_TMA971_section01_v132"
         proseg.proseg_tma_z_as_voxel_layer(path_tx, dir_output)
-    
+
     if False:
         path_tx_fov = "/mnt/nfs/home/wenruiwu/projects/indepth_cosmx_dlbcl/data/output/proseg_fov_cosmx_only_Indepth_TMA971_section01_v132/001/tx_file.csv"
         dir_output = "/mnt/nfs/home/wenruiwu/projects/indepth_cosmx_dlbcl/data/output/proseg_test_voxel_layer/"
@@ -30,8 +27,10 @@ if __name__ == "__main__":
             dir_output,
             voxel_layers,
         )
-    
+
     if True:
         path_tx = "/mnt/nfs/storage/CosMX/AIH_TMA001_section05_v132/AtoMx/flatFiles/AIH_TMA001_section05_v132/AIH_TMA001_section05_v132_tx_file.csv.gz"
         dir_output = "/mnt/nfs/home/wenruiwu/projects/guanrui_aih/data/output/proseg_fov_AIH_TMA001_section05_v132"
-        proseg.proseg_tma_z_as_voxel_layer(path_tx, dir_output, fovs=[3,4,5,9,10,11,13,16,19])
+        proseg.proseg_tma_z_as_voxel_layer(
+            path_tx, dir_output, fovs=[3, 4, 5, 9, 10, 11, 13, 16, 19]
+        )

@@ -5,7 +5,6 @@
 import logging
 import os
 
-import numpy as np
 import pandas as pd
 import tifffile
 from pycodex import align, io
@@ -132,7 +131,122 @@ def step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker):
 
 
 # %%
-# step1_align_src_on_dst(df_parameter, dir_alignment)
-# step2_export_metadata(dir_alignment, dir_metadata)
-step3_export_dapi_ometiff(df_parameter, dir_metadata, dir_ometiff_dapi)
-step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker)
+########################################################################################################################
+# Step 5: Supplementary Alignment
+########################################################################################################################
+
+
+def step5_supplementary_alignment(
+    dir_alignment,
+    dir_metadata,
+    dir_ometiff_dapi,
+    dir_ometiff_marker,
+    id,
+    dir_dst,
+    dir_src,
+    path_parameter,
+    src_rot90cw,
+    src_hflip,
+    name_output_dst,
+    name_output_src,
+    dapi,
+):
+    # Step 1: Align Source Images on Coordinates of Destination Images
+    align.sift_align_src_on_dst_coordinate(
+        id=id,
+        dir_dst=dir_dst,
+        dir_src=dir_src,
+        path_parameter=path_parameter,
+        dir_output=dir_alignment,
+        src_rot90cw=src_rot90cw,
+        src_hflip=src_hflip,
+        name_output_dst=name_output_dst,
+        name_output_src=name_output_src,
+    )
+
+    # Step 2: Export Marker Metadata
+    dir_region = os.path.join(dir_alignment, id)
+    if os.path.isdir(dir_region):
+        align.export_marker_metadata_to_excel(dir_region, dir_metadata)
+
+    # Step 3: Export DAPI OME-TIFF
+    df_metadata_dict = pd.read_excel(os.path.join(dir_metadata, f"{id}.xlsx"), sheet_name=None)
+    dapi_names = []
+    dapi_paths = []
+    for run, df_metadata in df_metadata_dict.items():
+        if run != "marker_order":
+            df_dapi = df_metadata[df_metadata["is_dapi"]]
+            dapi_paths = dapi_paths + df_dapi["path"].tolist()
+            dapi_names = dapi_names + df_dapi["marker"].tolist()
+    path_ometiff = os.path.join(dir_ometiff_dapi, f"{id}.ome.tiff")
+    dapi_images = [tifffile.imread(path) for path in tqdm(dapi_paths, desc=f"Loading DAPI for {id}")]
+    io.write_ometiff(path_ometiff, dapi_names, dapi_images)
+
+    # Step 4: Export Marker OME-TIFF
+    df_metadata_dict = pd.read_excel(os.path.join(dir_metadata, f"{id}.xlsx"), sheet_name=None)
+    df_metadata = pd.concat(
+        [df_metadata for run, df_metadata in df_metadata_dict.items() if run != "marker_order"], axis=0
+    )
+
+    marker_names = ["DAPI"]
+    marker_paths = [df_metadata["path"][df_metadata["marker"] == dapi].item()]
+    df_selection_dict = pd.read_excel(os.path.join(dir_ometiff_marker, "marker_selection.xlsx"), sheet_name=None)
+    df_selection_marker = df_selection_dict["marker_order"]
+    for i, row in df_selection_marker.iterrows():
+        marker, marker_name = row[["marker", "marker_name"]]
+        marker_names = marker_names + [marker_name]
+        marker_paths = marker_paths + [df_metadata["path"][df_metadata["marker"] == marker].item()]
+
+    path_ometiff = os.path.join(dir_ometiff_marker, f"{id}.ome.tiff")
+    marker_images = [tifffile.imread(path) for path in tqdm(marker_paths, desc=f"Loading markers for {id}")]
+    io.write_ometiff(path_ometiff, marker_names, marker_images)
+
+
+# %%
+if __name__ == "__main__":
+    # step1_align_src_on_dst(df_parameter, dir_alignment)
+    # step2_export_metadata(dir_alignment, dir_metadata)
+    # step3_export_dapi_ometiff(df_parameter, dir_metadata, dir_ometiff_dapi)
+    # step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker)
+
+    id = "TMA543_run1=reg024_run2=reg010"
+    dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run1/images/final/reg024"
+    dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run2/images/final/reg010"
+    path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA543/run1-reg024_run2-reg010/sift_parameter.pkl"
+    dapi = "run1-Ch1Cy1"
+    step5_supplementary_alignment(
+        dir_alignment,
+        dir_metadata,
+        dir_ometiff_dapi,
+        dir_ometiff_marker,
+        id=id,
+        dir_dst=dir_dst,
+        dir_src=dir_src,
+        path_parameter=path_parameter,
+        src_rot90cw=1,
+        src_hflip=False,
+        name_output_dst="run1",
+        name_output_src="run2",
+        dapi=dapi,
+    )
+
+    id = "TMA544_run1=reg001_run2=reg021"
+    dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg001"
+    dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run2/images/final/reg021"
+    path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA544/run1-reg001_run2-reg021/sift_parameter.pkl"
+    dapi = "run1-Ch1Cy1"
+    step5_supplementary_alignment(
+        dir_alignment,
+        dir_metadata,
+        dir_ometiff_dapi,
+        dir_ometiff_marker,
+        id=id,
+        dir_dst=dir_dst,
+        dir_src=dir_src,
+        path_parameter=path_parameter,
+        src_rot90cw=1,
+        src_hflip=False,
+        name_output_dst="run1",
+        name_output_src="run2",
+        dapi=dapi,
+    )
