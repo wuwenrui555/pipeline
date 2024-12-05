@@ -18,7 +18,7 @@ from tqdm import tqdm
 dir_log = "/mnt/nfs/home/wenruiwu/pipeline/pycodex/sift_plot_src_on_dst_coordinate/data/test"
 os.makedirs(dir_log, exist_ok=True)
 io.setup_logging(
-    os.path.join(dir_log, "01_alignment.log"),
+    os.path.join(dir_log, "alignment.log"),
     logger_level=logging.INFO,
     file_handler_level=logging.INFO,
     stream_handler_level=logging.WARNING,
@@ -29,14 +29,14 @@ io.setup_gpu("0,1,2,3")
 
 # parameter
 df_parameter = pd.read_excel(
-    "/mnt/nfs/home/wenruiwu/pipeline/pycodex/sift_plot_src_on_dst_coordinate/data/01_alignment_parameter.xlsx"
+    "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/02_sift_parameter/alignment_parameter.xlsx"
 )
 
 # path
-dir_alignment = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/01_alignment/"
-dir_metadata = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/02_metadata/"
-dir_ometiff_dapi = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/03_dapi/"
-dir_ometiff_marker = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/04_marker/"
+dir_alignment = "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/03_alignment/"
+dir_metadata = "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/04_metadata/"
+dir_ometiff_dapi = "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/05_dapi/"
+dir_ometiff_marker = "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/06_marker/"
 for dir in [dir_alignment, dir_metadata, dir_ometiff_dapi, dir_ometiff_marker]:
     os.makedirs(dir, exist_ok=True)
 # with pd.ExcelWriter(os.path.join(dir_ometiff_marker, "marker_selection.xlsx")) as writer:
@@ -48,7 +48,7 @@ for dir in [dir_alignment, dir_metadata, dir_ometiff_dapi, dir_ometiff_marker]:
 ########################################################################################################################
 # Step 1: Align Source Images on Coordinates of Destination Images
 ########################################################################################################################
-def step1_align_src_on_dst():
+def step1_align_src_on_dst(df_parameter, dir_alignment):
     def row_align(row, dir_output):
         align.sift_align_src_on_dst_coordinate(
             row["id"],
@@ -74,7 +74,7 @@ def step2_export_metadata(dir_alignment, dir_metadata):
     for file in tqdm(os.listdir(dir_alignment), desc="Exporting metadata"):
         dir_region = os.path.join(dir_alignment, file)
         if os.path.isdir(dir_region):
-            align.export_marker_metadata_to_excel(dir_region, dir_metadata)
+            align.export_marker_metadata_keyence(dir_region, dir_metadata)
 
 
 # %%
@@ -204,49 +204,49 @@ def step5_supplementary_alignment(
 
 # %%
 if __name__ == "__main__":
-    # step1_align_src_on_dst(df_parameter, dir_alignment)
-    # step2_export_metadata(dir_alignment, dir_metadata)
-    # step3_export_dapi_ometiff(df_parameter, dir_metadata, dir_ometiff_dapi)
-    # step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker)
+    step1_align_src_on_dst(df_parameter, dir_alignment)
+    step2_export_metadata(dir_alignment, dir_metadata)
+    step3_export_dapi_ometiff(df_parameter, dir_metadata, dir_ometiff_dapi)
+    step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker)
 
-    id = "TMA543_run1=reg024_run2=reg010"
-    dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run1/images/final/reg024"
-    dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run2/images/final/reg010"
-    path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA543/run1-reg024_run2-reg010/sift_parameter.pkl"
-    dapi = "run1-Ch1Cy1"
-    step5_supplementary_alignment(
-        dir_alignment,
-        dir_metadata,
-        dir_ometiff_dapi,
-        dir_ometiff_marker,
-        id=id,
-        dir_dst=dir_dst,
-        dir_src=dir_src,
-        path_parameter=path_parameter,
-        src_rot90cw=1,
-        src_hflip=False,
-        name_output_dst="run1",
-        name_output_src="run2",
-        dapi=dapi,
-    )
+    # id = "TMA543_run1=reg024_run2=reg010"
+    # dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run1/images/final/reg024"
+    # dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA543-run2/images/final/reg010"
+    # path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA543/run1-reg024_run2-reg010/sift_parameter.pkl"
+    # dapi = "run1-Ch1Cy1"
+    # step5_supplementary_alignment(
+    #     dir_alignment,
+    #     dir_metadata,
+    #     dir_ometiff_dapi,
+    #     dir_ometiff_marker,
+    #     id=id,
+    #     dir_dst=dir_dst,
+    #     dir_src=dir_src,
+    #     path_parameter=path_parameter,
+    #     src_rot90cw=1,
+    #     src_hflip=False,
+    #     name_output_dst="run1",
+    #     name_output_src="run2",
+    #     dapi=dapi,
+    # )
 
-    id = "TMA544_run1=reg001_run2=reg021"
-    dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg001"
-    dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run2/images/final/reg021"
-    path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA544/run1-reg001_run2-reg021/sift_parameter.pkl"
-    dapi = "run1-Ch1Cy1"
-    step5_supplementary_alignment(
-        dir_alignment,
-        dir_metadata,
-        dir_ometiff_dapi,
-        dir_ometiff_marker,
-        id=id,
-        dir_dst=dir_dst,
-        dir_src=dir_src,
-        path_parameter=path_parameter,
-        src_rot90cw=1,
-        src_hflip=False,
-        name_output_dst="run1",
-        name_output_src="run2",
-        dapi=dapi,
-    )
+    # id = "TMA544_run1=reg001_run2=reg021"
+    # dir_dst = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg001"
+    # dir_src = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run2/images/final/reg021"
+    # path_parameter = "/mnt/nfs/home/shuliluo/Projects/codex_wenrui/alignment/output-formal/TMA544/run1-reg001_run2-reg021/sift_parameter.pkl"
+    # dapi = "run1-Ch1Cy1"
+    # step5_supplementary_alignment(
+    #     dir_alignment,
+    #     dir_metadata,
+    #     dir_ometiff_dapi,
+    #     dir_ometiff_marker,
+    #     id=id,
+    #     dir_dst=dir_dst,
+    #     dir_src=dir_src,
+    #     path_parameter=path_parameter,
+    #     src_rot90cw=1,
+    #     src_hflip=False,
+    #     name_output_dst="run1",
+    #     name_output_src="run2",
+    #     dapi=dapi,
+    # )
