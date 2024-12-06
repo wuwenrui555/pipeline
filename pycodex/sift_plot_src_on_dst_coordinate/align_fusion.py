@@ -4,9 +4,9 @@
 ########################################################################################################################
 import logging
 import os
+import subprocess
 
 import pandas as pd
-import tifffile
 from pycodex import align, io
 from tqdm import tqdm
 
@@ -41,7 +41,6 @@ dir_ometiff_marker = "/mnt/nfs/home/wenruiwu/projects/alignment_dlbcl/06_marker/
 for dir in [dir_alignment, dir_metadata, dir_ometiff_dapi, dir_ometiff_marker]:
     os.makedirs(dir, exist_ok=True)
 # with pd.ExcelWriter(os.path.join(dir_ometiff_marker, "marker_selection.xlsx")) as writer:
-#     pd.DataFrame({"id": df_parameter["id"], "dapi": ""}).to_excel(writer, sheet_name="dapi", index=False)
 #     pd.DataFrame(columns=["marker", "marker_name"]).to_excel(writer, sheet_name="marker_order", index=False)
 
 
@@ -97,43 +96,83 @@ def step3_export_dapi_ometiff(dir_metadata, dir_ometiff_dapi):
     dapi_names = df_dapi["marker"].tolist()
     dapi_paths = df_dapi["path"].tolist()
     path_ometiff = os.path.join(dir_ometiff_dapi, "DAPI.ome.tiff")
-    dapi_images = [tifffile.imread(path) for path in tqdm(dapi_paths, desc="Loading DAPI")]
-    io.write_ometiff(path_ometiff, dapi_names, dapi_images)
+
+    path_script = "/mnt/nfs/home/wenruiwu/tools/ome-tiff-pyramid-tools/pyramid_assemble.py"
+    tile_size = 256
+    n_threads = 20
+    input_tiff_paths = dapi_paths
+    output_ometiff_path = path_ometiff
+    channel_names = dapi_names
+    command = [
+        "python",
+        path_script,
+        *input_tiff_paths,
+        output_ometiff_path,
+        "--channel-names",
+        *channel_names,
+        "--tile-size",
+        str(tile_size),
+        "--num-threads",
+        str(n_threads),
+    ]
+    command = [str(x) for x in command]
+    logging.info(f"Running command: {' '.join(command)}")
+    try:
+        subprocess.run(command, check=True)
+        logging.info(f"DAPI OME-TIFF generated successfully: {output_ometiff_path}")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error during execution: {e}")
 
 
 # %%
 ########################################################################################################################
 # Step 4: Export Marker OME-TIFF
 ########################################################################################################################
-def step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker):
+def step4_export_marker_ometiff(dir_metadata, dir_ometiff_marker):
     df_selection_dict = pd.read_excel(os.path.join(dir_ometiff_marker, "marker_selection.xlsx"), sheet_name=None)
-    df_selection_dapi = df_selection_dict["dapi"]
+    # df_selection_dapi = df_selection_dict["dapi"]
     df_selection_marker = df_selection_dict["marker_order"]
+    df_metadata = pd.read_excel(os.path.join(dir_metadata, "metadata.xlsx"))
+    path_ometiff_marker = os.path.join(dir_ometiff_marker, "marker.ome.tiff")
 
-    ids = df_parameter["id"]
-    for id in tqdm(ids, desc="Exporting markers OME-TIFFs"):
-        df_metadata_dict = pd.read_excel(os.path.join(dir_metadata, f"{id}.xlsx"), sheet_name=None)
-        df_metadata = pd.concat(
-            [df_metadata for run, df_metadata in df_metadata_dict.items() if run != "marker_order"], axis=0
-        )
+    marker_names = []
+    marker_paths = []
+    for i, row in df_selection_marker.iterrows():
+        marker, marker_name = row[["marker", "marker_name"]]
+        marker_path = df_metadata["path"][df_metadata["marker"] == marker].item()
+        marker_names.append(marker_name)
+        marker_paths.append(marker_path)
 
-        dapi = df_selection_dapi["dapi"][df_selection_dapi["id"] == id].item()
-        marker_names = ["DAPI"]
-        marker_paths = [df_metadata["path"][df_metadata["marker"] == dapi].item()]
-
-        for i, row in df_selection_marker.iterrows():
-            marker, marker_name = row[["marker", "marker_name"]]
-            marker_names = marker_names + [marker_name]
-            marker_paths = marker_paths + [df_metadata["path"][df_metadata["marker"] == marker].item()]
-
-        path_ometiff = os.path.join(dir_ometiff_marker, f"{id}.ome.tiff")
-        marker_images = [tifffile.imread(path) for path in tqdm(marker_paths, desc=f"Loading markers for {id}")]
-        io.write_ometiff(path_ometiff, marker_names, marker_images)
+    path_script = "/mnt/nfs/home/wenruiwu/tools/ome-tiff-pyramid-tools/pyramid_assemble.py"
+    tile_size = 256
+    n_threads = 20
+    input_tiff_paths = marker_paths
+    output_ometiff_path = path_ometiff_marker
+    channel_names = marker_names
+    command = [
+        "python",
+        path_script,
+        *input_tiff_paths,
+        output_ometiff_path,
+        "--channel-names",
+        *channel_names,
+        "--tile-size",
+        str(tile_size),
+        "--num-threads",
+        str(n_threads),
+    ]
+    command = [str(x) for x in command]
+    logging.info(f"Running command: {' '.join(command)}")
+    try:
+        subprocess.run(command, check=True)
+        logging.info(f"Marker OME-TIFF generated successfully: {output_ometiff_path}")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error during execution: {e}")
 
 
 # %%
 if __name__ == "__main__":
-    # step1_align_src_on_dst(df_parameter, dir_alignment)
+    step1_align_src_on_dst(df_parameter, dir_alignment)
     step2_export_metadata(dir_alignment, dir_metadata)
     step3_export_dapi_ometiff(dir_metadata, dir_ometiff_dapi)
-    # step4_export_marker_ometiff(df_parameter, dir_metadata, dir_ometiff_marker)
+    step4_export_marker_ometiff(dir_metadata, dir_ometiff_marker)
