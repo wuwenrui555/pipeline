@@ -1,11 +1,14 @@
 import os
+from pycodex.cls import Marker
+from pycodex.io import setup_gpu
+from pycodex import utils
 
-from pycodex import io, utils
+################################################################################
 
-########################################################################################################################
-
-marker_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/data/output/periodontal"
-output_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/output/data/segmentation_20241022_run2"
+marker_dir = "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/20241022_segmentation/data/output/periodontal/"
+output_dir = (
+    "/mnt/nfs/home/wenruiwu/projects/steph_periodontal/20241022_segmentation/output/data/segmentation_20241022_run2"
+)
 
 boundary_markers = ["HLA-1", "CD31", "E-cadherin", "CD68", "CD3e", "HLA-DR", "CD15", "Vimentin"]
 internal_markers = ["DAPI", "a-SMA"]
@@ -14,14 +17,17 @@ scale = True
 maxima_threshold = 0.075
 interior_threshold = 0.20
 
-########################################################################################################################
+################################################################################
 
-io.setup_gpu("0,1,2,3")
+
+setup_gpu("0,1,2,3")
 
 segmentation_dir = os.path.join(output_dir, "segmentation")
 cropped_dir = os.path.join(output_dir, "cropped")
 
-metadata_dict = io.organize_metadata_fusion(marker_dir)
+markers = Marker(marker_dir)
+markers.organize_metadata(platform="fusion", subfolders=True)
+metadata_dict = markers.metadata
 all_regions = list(metadata_dict.keys())
 
 utils.segmentation_mesmer(
