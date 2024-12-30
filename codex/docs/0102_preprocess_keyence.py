@@ -87,13 +87,14 @@ C1Q	C1Q
 """
 ################################################################################
 
-
 keyence = KeyencePreprocessor(dir_root)
 
-# Generate DAPI OME-TIFF and metadata
-keyence.export_dapi_ometiff_and_metadata(dir_output_review)
+# Step 1: Generate DAPI OME-TIFF and metadata
+if False:
+    keyence.export_dapi_ometiff_and_metadata(dir_output_review)
 
-# Generate final OME-TIFF
-df_metadata_dapi = pd.read_csv(StringIO(string_metadata_dapi), sep="\t")
-df_metadata_marker = pd.read_csv(StringIO(string_metadata_marker), sep="\t")
-keyence.export_ometiff(dir_output_ometiff, df_metadata_dapi, df_metadata_marker)
+# Step 2: Generate final OME-TIFF
+if True:
+    df_metadata_dapi = pd.read_csv(StringIO(string_metadata_dapi), sep="\t")
+    df_metadata_marker = pd.read_csv(StringIO(string_metadata_marker), sep="\t")
+    keyence.export_ometiff(dir_output_ometiff, df_metadata_dapi, df_metadata_marker)

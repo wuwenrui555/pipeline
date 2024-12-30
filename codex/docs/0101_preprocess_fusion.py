@@ -73,6 +73,7 @@ def preprocess_fusion(
 
     # crop QPTIFF file into multiple OME-TIFF files
     for name, crop_im_dict in crop_dict_by_geojson(im_dict, path_geojson):
+        print(f"Cropping OME-TIFF for: {name}")
         path_ometiff = dir_output / name / f"{name}.ome.tiff"
         path_ometiff.parent.mkdir(parents=True, exist_ok=True)
         if path_ometiff.exists():
