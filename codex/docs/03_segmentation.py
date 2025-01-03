@@ -1,0 +1,64 @@
+# conda activate cellSeg_test
+import logging
+from pathlib import Path
+
+from tqdm import tqdm
+
+from pycodex.io import setup_gpu, setup_logging
+from pycodex.segmentation import run_segmentation_mesmer
+
+
+def run_segmentation_batch(dir_root: str) -> None:
+    """
+    Run segmentation on a batch of regions.
+
+    Parameters
+    ----------
+    dir_root : str
+        Root directory of the regions, where each region is a subdirectory.
+    """
+    ############################################################################
+    # Parameters
+    boundary_markers = ["CD45", "CD3e", "CD163", "NaKATP"]
+    internal_markers = ["DAPI"]
+    pixel_size_um = 0.3775202  # Keyence
+    # pixel_size_um = 0.5068164319979996  # Fusion
+    scale = True
+    q_min = 0
+    q_max = 0.99
+    maxima_threshold = 0.075
+    interior_threshold = 0.20
+    tag = "20250103_run1"
+    ###########################################################################
+
+    dir_root = Path(dir_root)
+    dirs_region = [dir for dir in list(Path(dir_root).glob("*")) if dir.is_dir()]
+
+    for dir_region in tqdm(dirs_region, total=len(dirs_region)):
+        dir_region = Path(dir_region)
+        try:
+            run_segmentation_mesmer(
+                output_dir=dir_region,
+                boundary_markers=boundary_markers,
+                internal_markers=internal_markers,
+                pixel_size_um=pixel_size_um,
+                q_min=q_min,
+                q_max=q_max,
+                scale=scale,
+                maxima_threshold=maxima_threshold,
+                interior_threshold=interior_threshold,
+                tag=tag,
+            )
+            logging.info(f"Segmentation completed: {dir_region.name}")
+        except Exception as e:
+            logging.error(f"Segmentation Failed {dir_region.name}: {e}")
+
+
+dir_root = (
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/05_marker_ometiff"
+)
+path_log = "/mnt/nfs/home/wenruiwu/pipeline/pycodex/segmentation/practice/20250103_shuli_rcc.log"
+
+setup_gpu("0,1,2,3")
+setup_logging(path_log)
+run_segmentation_batch(dir_root)
