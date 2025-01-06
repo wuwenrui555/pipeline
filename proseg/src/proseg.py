@@ -37,6 +37,7 @@ def proseg(
     -------
     None
     """
+    os.makedirs(dir_output, exist_ok=True)
     # Define the command
     command = [
         "proseg",
