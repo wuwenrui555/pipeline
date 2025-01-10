@@ -8,6 +8,8 @@ from tqdm import tqdm
 from pycodex.io import setup_gpu, setup_logging
 from pycodex.segmentation import run_segmentation_mesmer
 
+TQDM_FORMAT = "{desc}: {percentage:3.0f}%|{bar:30}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
+
 
 def run_segmentation_batch(dir_root: str) -> None:
     """
@@ -85,27 +87,30 @@ def run_segmentation_test() -> None:
         "TMA544_run1=reg014_run2=reg008",
     ]
 
-    for region in regions:
+    parameters = list(product(regions, maxima_thresholds, interior_thresholds))
+    for region, maxima_threshold, interior_threshold in tqdm(
+        parameters,
+        desc="Segmentation",
+        bar_format=TQDM_FORMAT,
+    ):
         dir_region = dir_root / region
-        generator_parameter = product(maxima_thresholds, interior_thresholds)
-        for maxima_threshold, interior_threshold in generator_parameter:
-            tag = f"20250105_maxima_{maxima_threshold}_interior_{interior_threshold}"
-            try:
-                run_segmentation_mesmer(
-                    output_dir=dir_region,
-                    boundary_markers=boundary_markers,
-                    internal_markers=internal_markers,
-                    pixel_size_um=pixel_size_um,
-                    q_min=q_min,
-                    q_max=q_max,
-                    scale=scale,
-                    maxima_threshold=maxima_threshold,
-                    interior_threshold=interior_threshold,
-                    tag=tag,
-                )
-                logging.info(f"Segmentation completed: {dir_region.name}")
-            except Exception as e:
-                logging.error(f"Segmentation Failed {dir_region.name}: {e}")
+        tag = f"20250105_maxima_{maxima_threshold}_interior_{interior_threshold}"
+        try:
+            run_segmentation_mesmer(
+                output_dir=dir_region,
+                boundary_markers=boundary_markers,
+                internal_markers=internal_markers,
+                pixel_size_um=pixel_size_um,
+                q_min=q_min,
+                q_max=q_max,
+                scale=scale,
+                maxima_threshold=maxima_threshold,
+                interior_threshold=interior_threshold,
+                tag=tag,
+            )
+            logging.info(f"Segmentation completed: {dir_region.name}")
+        except Exception as e:
+            logging.error(f"Segmentation Failed {dir_region.name}: {e}")
 
 
 if False:
