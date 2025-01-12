@@ -1,5 +1,6 @@
 # %%
 import os
+import pickle as pkl
 import shutil
 from pathlib import Path
 from typing import Union
@@ -18,16 +19,12 @@ TQDM_FORMAT = "{desc}: {percentage:3.0f}%|{bar:10}| {n_fmt}/{total_fmt} [{elapse
 # Reference
 # https://github.com/MathOnco/valis/issues/154
 
-# %%
-
 
 class ValisAligner:
     def __init__(
         self,
         dst_register_f: Union[str, Path],
         src_register_f: Union[str, Path],
-        dst_apply_fl: list[Union[str, Path]],
-        src_apply_fl: list[Union[str, Path]],
         output_dir: Union[str, Path],
         tqdm_format: str = "{desc}: {percentage:3.0f}%|{bar:30}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
     ):
@@ -36,45 +33,55 @@ class ValisAligner:
 
         Parameters
         ----------
+
         dst_register_f : Union[str, Path]
-            Path to the destination image file for registration
+            Path to the destination image file for registration.
         src_register_f : Union[str, Path]
-            Path to the source image file for registration
-        dst_apply_fl : list[Union[str, Path]]
-            Path to the destination image files for applying registration
-        src_apply_fl : list[Union[str, Path]]
-            Path to the source image files for applying registration
+            Path to the source image file for registration.
         output_dir : Union[str, Path]
-            Path to the output directory
+            Path to the output directory.
         tqdm_format : str, optional
             Format for tqdm progress bar.
         """
         self.dst_register_f = Path(dst_register_f)
         self.src_register_f = Path(src_register_f)
-        self.dst_apply_fl = [Path(f) for f in dst_apply_fl]
-        self.src_apply_fl = [Path(f) for f in src_apply_fl]
         self.output_dir = Path(output_dir)
         self.tqdm_format = tqdm_format
 
-        # register the source image to the destination image
+        # Register the source image to the destination image
+        ## Initialize directories
         self.valis_dir = self.output_dir / "valis"
-        valis_dir_input = self.valis_dir / "input"
-        valis_dir_output = self.valis_dir / "output"
-        valis_dir_input.mkdir(parents=True, exist_ok=True)
-        valis_dir_output.mkdir(parents=True, exist_ok=True)
+        self._setup_directories()
 
-        shutil.copy(self.dst_register_f, valis_dir_input / "dst.tiff")
-        shutil.copy(self.src_register_f, valis_dir_input / "src.tiff")
+        ## Copy input files
+        shutil.copy(self.dst_register_f, self.valis_dir / "input" / "dst.tiff")
+        shutil.copy(self.src_register_f, self.valis_dir / "input" / "src.tiff")
 
+        ## Initialize registrar
         self.registrar = registration.Valis(
-            src_dir=str(valis_dir_input),
-            dst_dir=str(valis_dir_output),
-            reference_img_f=str(valis_dir_input / "dst.tiff"),
+            src_dir=str(self.valis_dir / "input"),
+            dst_dir=str(self.valis_dir / "output"),
+            reference_img_f=str(self.valis_dir / "input" / "dst.tiff"),
             align_to_reference=True,
         )
-        self.rigid_registrar, self.non_rigid_registrar, self.error_df = (
-            self.registrar.register()
-        )
+        _, _, self.error_df = self.registrar.register()
+        registration.kill_jvm()
+
+        ## Initialize aligners
+        self.rigid = self.AlignBase(self, non_rigid=False)
+        self.non_rigid = self.AlignBase(self, non_rigid=True)
+
+        # Save the instance
+        with open(self.valis_dir / "intermediate" / "valis_aligner.pkl", "wb") as f:
+            pkl.dump(self, f)
+
+    def _setup_directories(self):
+        """Create required directories"""
+        valis_dir_input = self.valis_dir / "input"
+        valis_dir_output = self.valis_dir / "output"
+        valis_dir_inter = self.valis_dir / "intermediate"
+        for d in [valis_dir_input, valis_dir_output, valis_dir_inter]:
+            d.mkdir(parents=True, exist_ok=True)
 
     def plot_overlap(
         self,
@@ -141,125 +148,164 @@ class ValisAligner:
 
         return fig, axs
 
-    def apply(self, non_rigid: bool = True):
-        """
-        Apply the registration to the source and destination images
+    class AlignBase:
+        def __init__(self, parent, non_rigid: bool):
+            self.parent = parent
+            self.non_rigid = non_rigid
+            self.mode = "non_rigid" if non_rigid else "rigid"
+            self.output_dir = parent.output_dir / f"registered_{self.mode}"
+            self._setup_directories()
 
-        Parameters
-        ----------
-        non_rigid : bool, optional
-            Whether to apply non-rigid registration, by default True.
-        """
-        tag = "non_rigid" if non_rigid else "rigid"
-        self.valis_dir_registered = self.valis_dir / f"registered_{tag}"
-        valis_dir_ometiff = self.valis_dir_registered / "ometiff"
-        valis_dir_temp = self.valis_dir_registered / "temp"
-        valis_dir_ometiff.mkdir(parents=True, exist_ok=True)
-        valis_dir_temp.mkdir(parents=True, exist_ok=True)
+            self.registered_fl = []
 
-        self.registered_fl = []
+        def _setup_directories(self):
+            """Create required directories"""
+            self.ometiff_dir = self.output_dir / "ometiff"
+            self.temp_dir = self.output_dir / "temp"
+            for d in [self.ometiff_dir, self.temp_dir]:
+                d.mkdir(parents=True, exist_ok=True)
 
-        # apply the registration to the destination images
-        dst_slide = self.registrar.get_slide("dst.tiff")
-        for dst_f in tqdm(
-            [self.dst_register_f] + self.dst_apply_fl,
-            desc="Processing dst",
-            bar_format=self.tqdm_format,
+        def apply(
+            self,
+            dst_apply_fl: list[Union[str, Path]],
+            src_apply_fl: list[Union[str, Path]],
         ):
-            registered_f = valis_dir_ometiff / f"dst_{dst_f.stem}.ome.tiff"
-            dst_slide.warp_and_save_slide(
-                src_f=str(dst_f),
-                dst_f=str(registered_f),
-                crop="reference",
-                non_rigid=non_rigid,
-            )
-            self.registered_fl.append(registered_f)
+            """
+            Apply the registration to the source and destination images
 
-        # apply the registration to the source images
-        src_slide = self.registrar.get_slide("src.tiff")
-        for src_f in tqdm(
-            [self.src_register_f] + self.src_apply_fl,
-            desc="Processing src",
-            bar_format=self.tqdm_format,
+            Parameters
+            ----------
+            dst_apply_fl : list[Union[str, Path]]
+                Path to the destination image files for applying registration0
+            src_apply_fl : list[Union[str, Path]]
+                Path to the source image files for applying registration.
+            """
+            dst_apply_fl = [Path(f) for f in dst_apply_fl]
+            src_apply_fl = [Path(f) for f in src_apply_fl]
+
+            with tqdm(
+                total=len(dst_apply_fl) + len(src_apply_fl) + 2,
+                desc=f"Aligning images ({self.mode})",
+                bar_format=self.parent.tqdm_format,
+            ) as total_pbar:
+                # Align destination images
+                self._process_images(
+                    slide=self.parent.registrar.get_slide("dst.tiff"),
+                    input_files=[self.parent.dst_register_f] + dst_apply_fl,
+                    prefix="dst",
+                    total_pbar=total_pbar,
+                )
+
+                # Align source images
+                self._process_images(
+                    slide=self.parent.registrar.get_slide("src.tiff"),
+                    input_files=[self.parent.src_register_f] + src_apply_fl,
+                    prefix="src",
+                    total_pbar=total_pbar,
+                )
+
+                # Create overlap mask
+                self._create_overlap_mask()
+
+        def _process_images(self, slide, input_files, prefix, total_pbar):
+            """
+            Process and register images
+            """
+            for f in input_files:
+                registered_f = self.ometiff_dir / f"{prefix}_{f.stem}.ome.tiff"
+                if registered_f.exists():
+                    print(f"File exists and skip: {registered_f}")
+                else:
+                    slide.warp_and_save_slide(
+                        src_f=str(f),
+                        dst_f=str(registered_f),
+                        crop="reference",
+                        non_rigid=self.non_rigid,
+                    )
+                if registered_f not in self.registered_fl:
+                    self.registered_fl.append(registered_f)
+                total_pbar.update(1)
+            # ValisAligner.AlignBase._process_images = _process_images
+
+        def _create_overlap_mask(self):
+            """
+            Create overlap mask for the region after registration
+            """
+            src_mask_f = self.temp_dir / "src_mask.tiff"
+            src_mask_aligned_f = self.temp_dir / "src_mask_aligned.ome.tiff"
+            if src_mask_aligned_f.exists():
+                print(f"File exists and skip: {src_mask_aligned_f}")
+            else:
+                with tifffile.TiffFile(self.parent.src_register_f) as tif:
+                    src_mask = np.ones(tif.pages[0].shape, dtype=np.uint16)
+                    tifffile.imwrite(src_mask_f, src_mask)
+
+                    src_slide = self.parent.registrar.get_slide("src.tiff")
+                    src_slide.warp_and_save_slide(
+                        src_f=str(src_mask_f),
+                        dst_f=str(src_mask_aligned_f),
+                        crop="reference",
+                        non_rigid=self.non_rigid,
+                    )
+            self.mask_overlap = tifffile.imread(src_mask_aligned_f)
+            # ValisAligner.AlignBase._create_overlap_mask = _create_overlap_mask
+
+        def get_metadata(self) -> pd.DataFrame:
+            """
+            Get metadata of registered images
+            """
+            metadata_df = pd.DataFrame(
+                {
+                    "registered_f": self.registered_fl,
+                    "f_name": [
+                        f.name.replace(".ome.tiff", "") for f in self.registered_fl
+                    ],
+                    "channel_name": "",
+                }
+            )
+            return metadata_df
+
+        def write_metadata(self, output_f: Union[str, Path]):
+            """
+            Write the metadata to a CSV file
+
+            Parameters
+            ----------
+            output_f : Union[str, Path]
+                Path to the output CSV file
+            """
+            metadata_df = self.get_metadata()
+            metadata_df.to_csv(str(output_f), index=False)
+
+        def write_ometiff(
+            self,
+            output_f: Union[str, Path],
+            f_names: list[str],
+            channel_names: list[str],
         ):
-            registered_f = valis_dir_ometiff / f"src_{src_f.stem}.ome.tiff"
-            src_slide.warp_and_save_slide(
-                src_f=str(src_f),
-                dst_f=str(registered_f),
-                crop="reference",
-                non_rigid=non_rigid,
-            )
-            self.registered_fl.append(registered_f)
+            """
+            Write the registered images to an OME-TIFF file
 
-        # create a mask to indicate the region of overlap after transformation
-        src_mask_f = valis_dir_temp / "src_mask.tiff"
-        src_mask_aligned_f = valis_dir_temp / "src_mask_aligned.ome.tiff"
-        with tifffile.TiffFile(self.src_register_f) as tif:
-            src_mask = np.ones(tif.pages[0].shape, dtype=np.uint16)
-            tifffile.imwrite(src_mask_f, src_mask)
+            Parameters
+            ----------
+            output_f : Union[str, Path]
+                Path to the output OME-TIFF file. If the file already exists, the
+                process will terminate to prevent overwriting.
+            f_names : list[str]
+                List of file names in the metadata you want embed in the OME-TIFF.
+            channel_names : list[str]
+                List of channel names
+            """
+            metadata_df = self.get_metadata().set_index("f_name")
+            if sum(metadata_df.index.duplicated()) > 0:
+                raise ValueError("Duplicated file names in the metadata")
 
-        src_slide = self.registrar.get_slide("src.tiff")
-        src_slide.warp_and_save_slide(
-            src_f=str(src_mask_f),
-            dst_f=str(src_mask_aligned_f),
-            crop="reference",
-            non_rigid=non_rigid,
-        )
-        self.mask_overlap = tifffile.imread(src_mask_aligned_f)
-
-        # metadata
-        self.metadata_df = pd.DataFrame(
-            {
-                "registered_f": self.registered_fl,
-                "f_name": [f.name.replace(".ome.tiff", "") for f in self.registered_fl],
-                "channel_name": "",
+            img_fl = metadata_df.loc[f_names]["registered_f"].tolist()
+            img_dict = {
+                channel_name: tifffile.imread(img_f) * self.mask_overlap
+                for img_f, channel_name in zip(img_fl, channel_names)
             }
-        )
-
-    def kill_jvm(self):
-        """
-        Kill the Java Virtual Machine (JVM)
-        """
-        registration.kill_jvm()
-
-    def write_metadata(self, output_f: Union[str, Path]):
-        """
-        Write the metadata to a CSV file
-
-        Parameters
-        ----------
-        output_f : Union[str, Path]
-            Path to the output CSV file
-        """
-        self.metadata_df.to_csv(str(output_f), index=False)
-
-    def write_ometiff(
-        self,
-        output_f: Union[str, Path],
-        f_names: list[str],
-        channel_names: list[str],
-    ):
-        """
-        Write the registered images to an OME-TIFF file
-
-        Parameters
-        ----------
-        output_f : Union[str, Path]
-            Path to the output OME-TIFF file. If the file already exists, the
-            process will terminate to prevent overwriting.
-        f_names : list[str]
-            List of file names in the metadata you want embed in the OME-TIFF.
-        channel_names : list[str]
-            List of channel names
-        """
-        img_fl = (
-            self.metadata_df.set_index("f_name").loc[f_names]["registered_f"].tolist()
-        )
-        img_dict = {
-            channel_name: tifffile.imread(img_f) * self.mask_overlap
-            for img_f, channel_name in zip(img_fl, channel_names)
-        }
-        export_ometiff_pyramid_from_dict(img_dict, str(output_f), channel_names)
+            export_ometiff_pyramid_from_dict(img_dict, str(output_f), channel_names)
 
 
 id = "RCC_TMA544_run1=reg014_run2=reg008"
@@ -284,40 +330,42 @@ f_names = [
     "src_reg008_cyc002_ch003_CD3e",
 ]
 channel_names = ["DAPI_dst", "CD45", "DAPI_src", "CD3e"]
-
+# %%
 valis_aligner = ValisAligner(
     dst_register_f=dst_register_f,
     src_register_f=src_register_f,
-    dst_apply_fl=dst_apply_fl,
-    src_apply_fl=src_apply_fl,
     output_dir=output_dir,
 )
-valis_aligner.apply(non_rigid=True)
+# %%
+valis_aligner_f = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/intermediate/valis_aligner.pkl"
+with open(valis_aligner_f, "rb") as f:
+    valis_aligner = pkl.load(f)
 
-output_f = valis_aligner.valis_dir_registered / f"{id}.ome.tiff"
+# %%
+valis_aligner.rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
+output_f = valis_aligner.rigid.output_dir / f"{id}.ome.tiff"
 if output_f.exists():
     os.remove(output_f)
-valis_aligner.write_ometiff(output_f, f_names, channel_names)
+valis_aligner.rigid.write_ometiff(output_f, f_names, channel_names)
 
-valis_aligner.apply(non_rigid=False)
-output_f = valis_aligner.valis_dir_registered / f"{id}.ome.tiff"
+
+valis_aligner.non_rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
+output_f = valis_aligner.non_rigid.output_dir / f"{id}.ome.tiff"
 if output_f.exists():
     os.remove(output_f)
-valis_aligner.write_ometiff(output_f, f_names, channel_names)
-
-valis_aligner.kill_jvm()
+valis_aligner.non_rigid.write_ometiff(output_f, f_names, channel_names)
 
 
 # %%
 fig, axs = valis_aligner.plot_overlap()
-# %%
 
+# %%
 img_dict_valis_non_rigid = load_tiff_to_dict(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/registered_non_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
     filetype="ome.tiff",
 )
 img_dict_valis_rigid = load_tiff_to_dict(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/registered_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
     filetype="ome.tiff",
 )
 img_dict_sift = load_tiff_to_dict(
@@ -394,10 +442,10 @@ plt.tight_layout()
 
 # %%
 mask = tifffile.imread(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/registered_non_rigid/temp/src_mask.tiff"
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/temp/src_mask.tiff"
 )
 mask_aligned = tifffile.imread(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/registered_non_rigid/temp/src_mask_aligned.ome.tiff"
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/temp/src_mask_aligned.ome.tiff"
 )
 mask[0, 0] = 0
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -405,8 +453,8 @@ axs[0].imshow(mask)
 axs[0].set_title("Mask with same size")
 axs[1].imshow(mask_aligned)
 axs[1].set_title("Mask after alignment")
-# %%
 
+# %%
 error_df = pd.concat(
     [
         valis_aligner.error_df.iloc[[1]].assign(id=id),
@@ -415,12 +463,8 @@ error_df = pd.concat(
     ]
 )
 
+
 # %%
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-
-
 def plot_dodge_points(
     error_df,
     metrics=["original_D", "rigid_D", "non_rigid_D"],
@@ -470,9 +514,9 @@ def plot_dodge_points(
     # Create the figure and axes
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
-        retrun_ax = False
+        return_ax = False
     else:
-        retrun_ax = True
+        return_ax = True
 
     for i, metric in enumerate(metrics):
         for j in x:
@@ -507,7 +551,7 @@ def plot_dodge_points(
 
     ax.grid(axis="y", linestyle="--", alpha=0.7)
 
-    if retrun_ax:
+    if return_ax:
         return ax
     else:
         plt.tight_layout()

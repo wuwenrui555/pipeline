@@ -1,0 +1,54 @@
+./RCC_TMA544_run1=reg014_run2=reg008
+├── registered_non_rigid
+│   ├── RCC_TMA544_run1=reg014_run2=reg008.ome.tiff
+│   ├── ometiff
+│   │   ├── dst_reg014_cyc001_ch001_Ch1Cy1.ome.tiff
+│   │   ├── dst_reg014_cyc002_ch001_Ch1Cy2.ome.tiff
+│   │   ├── dst_reg014_cyc020_ch003_CD45.ome.tiff
+│   │   ├── src_reg008_cyc001_ch001_Ch1Cy1.ome.tiff
+│   │   └── src_reg008_cyc002_ch003_CD3e.ome.tiff
+│   └── temp
+│       ├── src_mask.tiff
+│       └── src_mask_aligned.ome.tiff
+├── registered_rigid
+│   ├── RCC_TMA544_run1=reg014_run2=reg008.ome.tiff
+│   ├── ometiff
+│   │   ├── dst_reg014_cyc001_ch001_Ch1Cy1.ome.tiff
+│   │   ├── dst_reg014_cyc002_ch001_Ch1Cy2.ome.tiff
+│   │   ├── dst_reg014_cyc020_ch003_CD45.ome.tiff
+│   │   ├── src_reg008_cyc001_ch001_Ch1Cy1.ome.tiff
+│   │   └── src_reg008_cyc002_ch003_CD3e.ome.tiff
+│   └── temp
+│       ├── src_mask.tiff
+│       └── src_mask_aligned.ome.tiff
+└── valis
+    ├── input
+    │   ├── dst.tiff
+    │   └── src.tiff
+    ├── intermediate
+    │   └── valis_aligner.pkl
+    └── output
+        └── input
+            ├── data
+            │   ├── input_registrar.pickle
+            │   └── input_summary.csv
+            ├── deformation_fields
+            │   ├── 0_dst.png
+            │   └── 1_src.png
+            ├── masks
+            │   ├── dst.png
+            │   ├── input_non_rigid_mask.png
+            │   └── src.png
+            ├── non_rigid_registration
+            │   ├── 0_dst.png
+            │   └── 1_src.png
+            ├── overlaps
+            │   ├── input_non_rigid_overlap.png
+            │   ├── input_original_overlap.png
+            │   └── input_rigid_overlap.png
+            ├── processed
+            │   ├── dst.png
+            │   └── src.png
+            └── rigid_registration
+                ├── 0_dst.png
+                └── 1_src.png
