@@ -1,4 +1,5 @@
 # %%
+import logging
 import os
 import pickle as pkl
 import shutil
@@ -10,7 +11,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 from matplotlib.patches import Patch
-from pyqupath.ometiff import export_ometiff_pyramid_from_dict, load_tiff_to_dict
+from pyqupath.ometiff import export_ometiff_pyramid_from_dict
 from tqdm import tqdm
 from valis import registration
 
@@ -18,6 +19,71 @@ TQDM_FORMAT = "{desc}: {percentage:3.0f}%|{bar:10}| {n_fmt}/{total_fmt} [{elapse
 
 # Reference
 # https://github.com/MathOnco/valis/issues/154
+
+
+def setup_logging(
+    log_file=os.path.join(os.getcwd(), "output.log"),
+    log_format="%(asctime)s - %(levelname)s - %(message)s",
+    log_mode="w",
+    logger_level=logging.INFO,
+    file_handler_level=logging.INFO,
+    stream_handler_level=logging.WARNING,
+):
+    """
+    Configures logging to output messages to both a file and the console.
+
+    Parameters
+    ----------
+    log_file : str, optional
+        Path to the log file. Default is 'output.log' in the current working directory.
+    log_format : str, optional
+        Format for log messages. Default includes timestamp, log level, and message.
+    log_mode : str, optional
+        File mode for the log file. Default is 'w' (write mode, overwrites file).
+    logger_level : int, optional
+        Logging level for the root logger. Default is logging.WARNING.
+    file_handler_level : int, optional
+        Logging level for the FileHandler. Default is logging.INFO.
+    stream_handler_level : int, optional
+        Logging level for the StreamHandler (console output). Default is logging.WARNING.
+
+    Returns
+    -------
+    None
+        This function configures the logger and does not return any value.
+
+    Notes
+    -----
+    - The logger level controls the global filtering of messages.
+    - The FileHandler writes log messages to a file.
+    - The StreamHandler displays log messages in the console.
+    """
+    # Get the root logger
+    logger = logging.getLogger()
+    logger.setLevel(logger_level)  # Set the logger's global logging level
+
+    # Create a FileHandler for writing logs to a file
+    file_handler = logging.FileHandler(log_file, mode=log_mode)
+    file_handler.setLevel(file_handler_level)  # Set the level for the file handler
+    file_handler.setFormatter(logging.Formatter(log_format))  # Apply the log format
+
+    # Create a StreamHandler for console output
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(
+        stream_handler_level
+    )  # Set the level for the stream handler
+    stream_handler.setFormatter(
+        logging.Formatter(log_format)
+    )  # Apply the same log format
+
+    # Add both handlers to the logger
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+
+    # Optional: Print confirmation to the console
+    print(
+        f"\nLogging is configured. Logs are saved to: {log_file} and displayed in the console."
+    )
 
 
 class ValisAligner:
@@ -83,6 +149,7 @@ class ValisAligner:
         for d in [valis_dir_input, valis_dir_output, valis_dir_inter]:
             d.mkdir(parents=True, exist_ok=True)
 
+    # TODO: wrap into valis initialization
     def plot_overlap(
         self,
         original: bool = True,
@@ -184,14 +251,14 @@ class ValisAligner:
             src_apply_fl = [Path(f) for f in src_apply_fl]
 
             with tqdm(
-                total=len(dst_apply_fl) + len(src_apply_fl) + 2,
+                total=len(dst_apply_fl) + len(src_apply_fl),
                 desc=f"Aligning images ({self.mode})",
                 bar_format=self.parent.tqdm_format,
             ) as total_pbar:
                 # Align destination images
                 self._process_images(
                     slide=self.parent.registrar.get_slide("dst.tiff"),
-                    input_files=[self.parent.dst_register_f] + dst_apply_fl,
+                    input_files=dst_apply_fl,
                     prefix="dst",
                     total_pbar=total_pbar,
                 )
@@ -199,7 +266,7 @@ class ValisAligner:
                 # Align source images
                 self._process_images(
                     slide=self.parent.registrar.get_slide("src.tiff"),
-                    input_files=[self.parent.src_register_f] + src_apply_fl,
+                    input_files=src_apply_fl,
                     prefix="src",
                     total_pbar=total_pbar,
                 )
@@ -306,276 +373,3 @@ class ValisAligner:
                 for img_f, channel_name in zip(img_fl, channel_names)
             }
             export_ometiff_pyramid_from_dict(img_dict, str(output_f), channel_names)
-
-
-id = "RCC_TMA544_run1=reg014_run2=reg008"
-
-dst_register_f = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg014/reg014_cyc001_ch001_Ch1Cy1.tif"
-src_register_f = "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run2/images/final/reg008/reg008_cyc001_ch001_Ch1Cy1.tif"
-
-dst_apply_fl = [
-    "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg014/reg014_cyc002_ch001_Ch1Cy2.tif",
-    "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run1/images/final/reg014/reg014_cyc020_ch003_CD45.tif",
-]
-src_apply_fl = [
-    "/mnt/nfs/storage/RCC/RCC_formal_CODEX/RCC_TMA544-run2/images/final/reg008/reg008_cyc002_ch003_CD3e.tif",
-]
-
-output_dir = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test"
-
-f_names = [
-    "dst_reg014_cyc002_ch001_Ch1Cy2",
-    "dst_reg014_cyc020_ch003_CD45",
-    "src_reg008_cyc001_ch001_Ch1Cy1",
-    "src_reg008_cyc002_ch003_CD3e",
-]
-channel_names = ["DAPI_dst", "CD45", "DAPI_src", "CD3e"]
-# %%
-valis_aligner = ValisAligner(
-    dst_register_f=dst_register_f,
-    src_register_f=src_register_f,
-    output_dir=output_dir,
-)
-# %%
-valis_aligner_f = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/valis/intermediate/valis_aligner.pkl"
-with open(valis_aligner_f, "rb") as f:
-    valis_aligner = pkl.load(f)
-
-# %%
-valis_aligner.rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
-output_f = valis_aligner.rigid.output_dir / f"{id}.ome.tiff"
-if output_f.exists():
-    os.remove(output_f)
-valis_aligner.rigid.write_ometiff(output_f, f_names, channel_names)
-
-
-valis_aligner.non_rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
-output_f = valis_aligner.non_rigid.output_dir / f"{id}.ome.tiff"
-if output_f.exists():
-    os.remove(output_f)
-valis_aligner.non_rigid.write_ometiff(output_f, f_names, channel_names)
-
-
-# %%
-fig, axs = valis_aligner.plot_overlap()
-
-# %%
-img_dict_valis_non_rigid = load_tiff_to_dict(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
-    filetype="ome.tiff",
-)
-img_dict_valis_rigid = load_tiff_to_dict(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_rigid/RCC_TMA544_run1=reg014_run2=reg008.ome.tiff",
-    filetype="ome.tiff",
-)
-img_dict_sift = load_tiff_to_dict(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/03_dapi/TMA544_run1=reg014_run2=reg008.ome.tiff",
-    filetype="ome.tiff",
-)
-
-y_min = 5225
-x_min = 1835
-length = 50
-
-
-def rgb_ndarray(img_dst, img_src, y_min, x_min, length):
-    # Define the region of interest
-    roi_dst = img_dst[y_min : (y_min + length), x_min : (x_min + length)]
-    roi_src = img_src[y_min : (y_min + length), x_min : (x_min + length)]
-
-    # Normalize the images to [0, 1] for visualization
-    roi_dst_norm = roi_dst / roi_dst.max() if roi_dst.max() != 0 else roi_dst
-    roi_src_norm = roi_src / roi_src.max() if roi_src.max() != 0 else roi_src
-
-    # Create an RGB overlay
-    overlay = np.zeros((*roi_dst.shape, 3))  # Initialize an RGB image
-    overlay[..., 0] = roi_dst_norm  # Red channel for `DAPI_dst`
-    overlay[..., 1] = roi_src_norm  # Green channel for `DAPI_src`
-
-    return overlay
-
-
-overlay_valis_non_rigid = rgb_ndarray(
-    img_dict_valis_non_rigid["DAPI_dst"],
-    img_dict_valis_non_rigid["DAPI_src"],
-    y_min,
-    x_min,
-    length,
-)
-overlay_valis_rigid = rgb_ndarray(
-    img_dict_valis_rigid["DAPI_dst"],
-    img_dict_valis_rigid["DAPI_src"],
-    y_min,
-    x_min,
-    length,
-)
-overlay_sift = rgb_ndarray(
-    img_dict_sift["run1-Ch1Cy2"],
-    img_dict_sift["run2-Ch1Cy1"],
-    y_min,
-    x_min,
-    length,
-)
-
-
-fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-axs[0].imshow(overlay_valis_non_rigid)
-axs[0].set_title("Valis Alignment (non-rigid)")
-axs[1].imshow(overlay_valis_rigid)
-axs[1].set_title("Valis Alignment (rigid)")
-axs[2].imshow(overlay_sift)
-axs[2].set_title("SIFT Alignment")
-
-## Add color legend
-legend_elements = [
-    Patch(facecolor="#FF0000", label="Destination", edgecolor="black"),
-    Patch(facecolor="#00FF00", label="Source", edgecolor="black"),
-]
-fig.legend(
-    handles=legend_elements,
-    loc="upper center",
-    ncol=2,
-    bbox_to_anchor=(0.5, 0),
-)
-
-plt.tight_layout()
-
-# %%
-mask = tifffile.imread(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/temp/src_mask.tiff"
-)
-mask_aligned = tifffile.imread(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/999_test/registered_non_rigid/temp/src_mask_aligned.ome.tiff"
-)
-mask[0, 0] = 0
-fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-axs[0].imshow(mask)
-axs[0].set_title("Mask with same size")
-axs[1].imshow(mask_aligned)
-axs[1].set_title("Mask after alignment")
-
-# %%
-error_df = pd.concat(
-    [
-        valis_aligner.error_df.iloc[[1]].assign(id=id),
-        # valis_aligner.error_df.iloc[[1]].assign(id="id1"),
-        # valis_aligner.error_df.iloc[[1]].assign(id="id2"),
-    ]
-)
-
-
-# %%
-def plot_dodge_points(
-    error_df,
-    metrics=["original_D", "rigid_D", "non_rigid_D"],
-    x_col="id",
-    colors=None,
-    markers=None,
-    bar_width=0.1,
-    figsize=(10, 6),
-    y_label="Distance (D)",
-    ax=None,
-):
-    """
-    Generate a dodge point plot for the given DataFrame.
-
-    Parameters:
-    ----------
-    error_df : pd.DataFrame
-        DataFrame containing the data to plot.
-    metrics : list[str]
-        List of column names representing the metrics to plot.
-    x_col : str, optional
-        Column name for the x-axis labels (default is "id").
-    colors : list[str], optional
-        List of colors for the metrics (default is None, will use default colors).
-    markers : list[str], optional
-        List of marker styles for the metrics (default is None, will use ["o", "s", "D"]).
-    bar_width : float, optional
-        Dodge distance between points (default is 0.1).
-    figsize : tuple, optional
-        Figure size (default is (10, 6)).
-    y_label : str, optional
-        Label for the y-axis (default is "Distance (D)").
-
-    Returns:
-    -------
-    fig, ax : tuple or AxesSubplot
-        If `ax` is None, returns (fig, ax). Otherwise, returns ax.
-    """
-    error_df = error_df.copy().reset_index(drop=True)
-
-    x = np.arange(len(error_df))  # Numeric positions for x-axis
-    if colors is None:
-        colors = ["green", "green", "green"]
-    if markers is None:
-        markers = ["o", "s", "D"]
-
-    # Create the figure and axes
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-        return_ax = False
-    else:
-        return_ax = True
-
-    for i, metric in enumerate(metrics):
-        for j in x:
-            # Determine color based on whether this is the minimum value
-            color = colors[i]
-            if error_df.loc[j, metric] == min(error_df.loc[j, metrics]):
-                color = "red"  # Highlight the minimum value
-
-            # Plot each point
-            ax.scatter(
-                j + (i - 1) * bar_width,  # Dodge position
-                error_df.loc[j, metric],
-                color=color,
-                marker=markers[i],
-                label=metric if j == 0 else "",  # Only add label once
-                s=80,
-            )
-
-    # Customize the plot
-    ax.set_xticks(x)
-    ax.set_xticklabels(error_df[x_col], rotation=90)
-    ax.set_ylabel(y_label)
-    ax.legend(
-        loc="center left",  # Position relative to the bounding box
-        bbox_to_anchor=(1.02, 0.5),
-    )
-    # Add padding to x-axis limits
-    x_padding = 0.5  # Adjust this value to control the padding
-    ax.set_xlim(
-        -x_padding, len(x) - 1 + x_padding
-    )  # Add padding to both sides of the x-axis
-
-    ax.grid(axis="y", linestyle="--", alpha=0.7)
-
-    if return_ax:
-        return ax
-    else:
-        plt.tight_layout()
-        return fig, ax
-
-
-# Example usage
-
-fig, axs = plt.subplots(1, 2, figsize=(8, 10))
-axs[0] = plot_dodge_points(
-    error_df,
-    metrics=["original_D", "rigid_D", "non_rigid_D"],
-    bar_width=0.3,
-    figsize=(3, 6),
-    y_label="Distance (D)",
-    ax=axs[0],
-)
-axs[1] = plot_dodge_points(
-    error_df,
-    metrics=["original_rTRE", "rigid_rTRE", "non_rigid_rTRE"],
-    bar_width=0.3,
-    figsize=(3, 6),
-    y_label="Relative Target Registration Error (rTRE)",
-    ax=axs[1],
-)
-plt.tight_layout()
-# %%

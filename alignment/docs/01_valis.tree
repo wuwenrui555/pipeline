@@ -1,4 +1,4 @@
-./RCC_TMA544_run1=reg014_run2=reg008
+RCC_TMA544_run1=reg014_run2=reg008
 ├── registered_non_rigid
 │   ├── RCC_TMA544_run1=reg014_run2=reg008.ome.tiff
 │   ├── ometiff
