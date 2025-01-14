@@ -14,11 +14,23 @@ from src.valisaligner import ValisAligner, setup_logging
 InteractiveShell.ast_node_interactivity = "all"
 TQDM_FORMAT = "{desc}: {percentage:3.0f}%|{bar:10}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
 
+
 # %%
+def get_id(row):
+    tma_id = re.sub(r"-formal", "", row["sheet"])
+    id = f"RCC-{tma_id}-dst={row['dst_id']}-src={row['src_id']}"
+    id = re.sub(r"\s+", "", id)
+    return id
+
+
 # Load alignment parameters
-params_f = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/data/raw/20250110_alignment_parameter.xlsx"
+params_f = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/data/raw/20250113_alignment_parameter.xlsx"
 sheets = pd.ExcelFile(params_f).sheet_names
-sheet_l = [sheet for sheet in sheets if sheet.endswith("-formal")]
+sheet_l = [
+    sheet
+    for sheet in sheets
+    if re.search(r"formal", sheet) and not re.search(r"not-formal", sheet)
+]
 
 cols_rename = {
     "run1 (destination)": "dst_id",
@@ -42,6 +54,7 @@ params_df = (
     .reset_index(drop=True)
     .rename(columns=cols_rename)
 )
+params_df["id"] = params_df.apply(get_id, axis=1)
 
 # %%
 output_root = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/"
@@ -80,19 +93,36 @@ def run_valis_alignment(output_root, row):
     valis_aligner.rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
 
 
-setup_logging(Path(output_root) / "valis_alignment.log")
-for i, row in tqdm(
-    params_df.iterrows(),
-    desc="Processing",
-    bar_format=TQDM_FORMAT,
-    total=params_df.shape[0],
-):
-    tma_id = re.sub(r"-formal", "", row["sheet"])
-    id = f"RCC-{tma_id}-dst={row['dst_id']}-src={row['src_id']}"
-    id = re.sub(r"\s+", "", id)
-    try:
-        run_valis_alignment(output_root, row)
-        logging.info(f"Succeed: {id}.")
-    except Exception as e:
-        logging.error(f"Failed: {id} ({e}).")
+if False:
+    setup_logging(Path(output_root) / "valis_alignment.log")
+    for i, row in tqdm(
+        params_df.iterrows(),
+        desc="Processing",
+        bar_format=TQDM_FORMAT,
+        total=params_df.shape[0],
+    ):
+        id = row["id"]
+        try:
+            run_valis_alignment(output_root, row)
+            logging.info(f"Succeed: {id}.")
+        except Exception as e:
+            logging.error(f"Failed: {id} ({e}).")
+
+if True:
+    setup_logging(Path(output_root) / "valis_alignment_tma003.log")
+    run_df = params_df[params_df["tma"] == "TMA003"]
+    for i, row in tqdm(
+        run_df.iterrows(),
+        desc="Processing",
+        bar_format=TQDM_FORMAT,
+        total=run_df.shape[0],
+    ):
+        id = row["id"]
+        try:
+            run_valis_alignment(output_root, row)
+            logging.info(f"Succeed: {id}.")
+        except Exception as e:
+            logging.error(f"Failed: {id} ({e}).")
+
+
 # %%
