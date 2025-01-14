@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from IPython.core.interactiveshell import InteractiveShell
+from pyqupath.ometiff import export_ometiff_pyramid
 from tqdm import tqdm
 
 sys.path.append("/mnt/nfs/home/wenruiwu/pipeline/alignment")
@@ -70,52 +71,15 @@ def run_valis_apply(row):
     valis_aligner.non_rigid.apply(dst_apply_fl=dst_apply_fl, src_apply_fl=src_apply_fl)
 
 
-params_df = pd.read_csv(
-    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/alignment_parameter.csv"
-)
-
-if False:
-    setup_logging(
-        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/valis_register.log"
-    )
-    for i, row in tqdm(
-        params_df.iterrows(),
-        desc="Register",
-        bar_format=TQDM_FORMAT,
-        total=params_df.shape[0],
-    ):
-        id = row["id"]
-        try:
-            run_valis_register(row)
-            logging.info(f"Succeed: {id}.")
-        except Exception as e:
-            logging.error(f"Failed: {id} ({e}).")
-
-if False:
-    setup_logging(
-        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/valis_apply.log"
-    )
-    run_df = params_df[params_df["tma"] == "TMA003"]
-    for i, row in tqdm(
-        run_df.iterrows(),
-        desc="Apply",
-        bar_format=TQDM_FORMAT,
-        total=run_df.shape[0],
-    ):
-        id = row["id"]
-        try:
-            run_valis_apply(row)
-            logging.info(f"Succeed: {id}.")
-        except Exception as e:
-            logging.error(f"Failed: {id} ({e}).")
-
-
 ###############################################################################
 # OME-TIFF construction: Markers
 ###############################################################################
 
 
 def parse_metadata_keyence(output_dir, non_rigid=True):
+    """
+    Parse metadata from output directory for Keyence data.
+    """
     id = Path(output_dir).name
     tag = "non_rigid" if non_rigid else "rigid"
     ometiff_dir = Path(output_dir) / f"registered_{tag}" / "ometiff"
@@ -161,6 +125,9 @@ def parse_metadata_keyence(output_dir, non_rigid=True):
 
 
 def review_markerlist_pattern(params_df, excel_dir):
+    """
+    Export markerlist patterns and corresponding IDs.
+    """
     # Find distinct markerlist patterns
     markerlist_dict = defaultdict(list)
     for i, row in params_df.iterrows():
@@ -193,11 +160,110 @@ def review_markerlist_pattern(params_df, excel_dir):
     return label_markerlist, label_id
 
 
-if False:
+###############################################################################
+# OME-TIFF construction: DAPI selection
+###############################################################################
+
+
+def export_dapi_ometiff(row, dapi_dir, non_rigid=True):
+    """
+    Export DAPI OME-TIFF.
+    """
+    id = row.id
+    ometiff_f = Path(dapi_dir) / f"{id}.ome.tiff"
+
+    metadata = parse_metadata_keyence(row.output_dir, non_rigid=non_rigid)
+    metadata_dapi = metadata[metadata.marker_type == "dapi"].sort_values("filename")
+    img_fl = metadata_dapi.img_f.astype(str).tolist()
+    channel_names = metadata_dapi.filename.astype(str).tolist()
+
+    if not ometiff_f.exists():
+        export_ometiff_pyramid(
+            paths_tiff=img_fl,
+            path_ometiff=str(ometiff_f),
+            channel_names=channel_names,
+        )
+    else:
+        logging.info(f"OME-TIFF exists and skip: {id}.")
+
+
+###############################################################################
+# OME-TIFF construction: Final OME-TIFF with DAPI and markers
+###############################################################################
+
+
+###############################################################################
+# Main
+###############################################################################
+
+
+def main_valis_register():
+    setup_logging(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/log/valis_register.log"
+    )
+    for i, row in tqdm(
+        params_df.iterrows(),
+        desc="Register",
+        bar_format=TQDM_FORMAT,
+        total=params_df.shape[0],
+    ):
+        id = row["id"]
+        try:
+            run_valis_register(row)
+            logging.info(f"Succeed: {id}.")
+        except Exception as e:
+            logging.error(f"Failed: {id} ({e}).")
+
+
+def main_valis_apply():
+    setup_logging(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/log/valis_apply.log"
+    )
+    run_df = params_df
+    for i, row in tqdm(
+        params_df.iterrows(),
+        desc="Apply",
+        bar_format=TQDM_FORMAT,
+        total=run_df.shape[0],
+    ):
+        id = row["id"]
+        try:
+            run_valis_apply(row)
+            logging.info(f"Succeed: {id}.")
+        except Exception as e:
+            logging.error(f"Failed: {id} ({e}).")
+
+
+def main_valis_markerlist():
     excel_dir = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/metadata"
     label_markerlist, label_id = review_markerlist_pattern(params_df, excel_dir)
 
 
-###############################################################################
-# OME-TIFF construction: DAPI selection
-###############################################################################
+def main_dapi_ometiff():
+    setup_logging(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/log/dapi_ometiff.log"
+    )
+    dapi_dir = "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250114_dapi_selection/"
+    for i, row in tqdm(
+        params_df.iterrows(),
+        desc="DAPI OME-TIFF",
+        bar_format=TQDM_FORMAT,
+        total=params_df.shape[0],
+    ):
+        id = row["id"]
+        try:
+            export_dapi_ometiff(row, dapi_dir, non_rigid=True)
+            logging.info(f"Succeed: {id}.")
+        except Exception as e:
+            logging.error(f"Failed: {id} ({e}).")
+
+
+# %%
+params_df = pd.read_csv(
+    "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/metadata/alignment_parameter.csv"
+)
+
+# main_valis_register()
+main_valis_apply()
+# main_valis_markerlist()
+main_dapi_ometiff()
