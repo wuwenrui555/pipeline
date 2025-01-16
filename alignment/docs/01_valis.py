@@ -1,19 +1,19 @@
 # %%
 import logging
+import os
 import pickle
 import re
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import tifffile
+from chalign.io import setup_logging
+from chalign.valisaligner import ValisAligner
 from IPython.core.interactiveshell import InteractiveShell
-from pyqupath.ometiff import export_ometiff_pyramid
+from pyqupath.ometiff import export_ometiff_pyramid, export_ometiff_pyramid_from_dict
 from tqdm import tqdm
-
-sys.path.append("/mnt/nfs/home/wenruiwu/pipeline/alignment")
-from src.valisaligner import ValisAligner, setup_logging
 
 InteractiveShell.ast_node_interactivity = "all"
 TQDM_FORMAT = "{desc}: {percentage:3.0f}%|{bar:10}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
@@ -192,6 +192,75 @@ def export_dapi_ometiff(row, dapi_dir, non_rigid=True):
 ###############################################################################
 
 
+def run_export_ometiff():
+    dapi_df = pd.read_excel(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/params/dapi_selection.xlsx",
+        sheet_name="alignment_parameter",
+    )
+    marker_dict = pd.read_excel(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/params/label_markerlist.xlsx",
+        sheet_name=None,
+    )
+    label_df = pd.read_excel(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/params/label_id.xlsx",
+        sheet_name=None,
+    )
+    label_dict = {id: label for label, id_df in label_df.items() for id in id_df.id}
+    input_dir = Path(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/valis"
+    )
+    output_dir = Path(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/"
+    )
+
+    for id, label in tqdm(
+        label_dict.items(), desc="Marker Dict", bar_format=TQDM_FORMAT
+    ):
+        marker_df = marker_dict[label].reset_index(drop=True)
+        marker_df = marker_df.iloc[: np.where(marker_df.marker_label.isna())[0][0]]
+        mask_f = (
+            input_dir
+            / id
+            / "registered_non_rigid"
+            / "temp"
+            / "src_mask_aligned.ome.tiff"
+        )
+        mask = tifffile.imread(mask_f)
+
+        im_dict = {}
+        for i, row in tqdm(
+            marker_df.iterrows(),
+            desc="Marker",
+            bar_format=TQDM_FORMAT,
+            total=marker_df.shape[0],
+        ):
+            tiff_f = list(
+                (input_dir / id / "registered_non_rigid" / "ometiff").glob(
+                    f"{row.marker_label}"[:4] + "*" + f"{row.marker_label}"[4:] + "*"
+                )
+            )[0]
+            im = tifffile.imread(tiff_f)
+            im_dict[row.marker_name] = im * mask
+
+        dapi_df_id = dapi_df[dapi_df.id == id]
+        dapi_f = (
+            input_dir
+            / id
+            / "registered_non_rigid"
+            / "ometiff"
+            / dapi_df_id.dapi.str.replace("tiff", "ome.tiff").values[0]
+        )
+        im_dict["DAPI"] = tifffile.imread(dapi_f) * mask
+
+        output_f = output_dir / id / f"{id}.ome.tiff"
+        output_f.parent.mkdir(parents=True, exist_ok=True)
+        if output_f.exists():
+            os.remove(output_f)
+        export_ometiff_pyramid_from_dict(
+            im_dict, str(output_f), ["DAPI"] + marker_df.marker_name.tolist()
+        )
+
+
 ###############################################################################
 # Main
 ###############################################################################
@@ -258,12 +327,20 @@ def main_dapi_ometiff():
             logging.error(f"Failed: {id} ({e}).")
 
 
+def main_export_ometiff():
+    setup_logging(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/logs/export_ometiff.log"
+    )
+    run_export_ometiff()
+
+
 # %%
 params_df = pd.read_csv(
     "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/metadata/alignment_parameter.csv"
 )
 
 # main_valis_register()
-main_valis_apply()
+# main_valis_apply()
 # main_valis_markerlist()
-main_dapi_ometiff()
+# main_dapi_ometiff()
+main_export_ometiff()
