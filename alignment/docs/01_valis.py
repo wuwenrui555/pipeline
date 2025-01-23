@@ -213,6 +213,8 @@ def run_export_ometiff():
         "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250116_ometiff/"
     )
 
+    dapi_index = get_max_dst_dapi_index()
+    dapi = f"Ch1Cy{dapi_index}"
     for id, label in tqdm(
         label_dict.items(), desc="Marker Dict", bar_format=TQDM_FORMAT
     ):
@@ -243,22 +245,68 @@ def run_export_ometiff():
             im_dict[row.marker_name] = im * mask
 
         dapi_df_id = dapi_df[dapi_df.id == id]
-        dapi_f = (
+        dapi_f = [
+            f
+            for f in (input_dir / id / "registered_non_rigid" / "ometiff").glob("*")
+            if re.search(f"dst.+{dapi}", f.name)
+        ][0]
+        dst_dapi_f = (
             input_dir
             / id
             / "registered_non_rigid"
             / "ometiff"
-            / dapi_df_id.dapi.str.replace("tiff", "ome.tiff").values[0]
+            / f"dst_{dapi_df_id.dst_register.str.replace('tif', 'ome.tiff').values[0]}"
+        )
+        src_dapi_f = (
+            input_dir
+            / id
+            / "registered_non_rigid"
+            / "ometiff"
+            / f"src_{dapi_df_id.src_register.str.replace('tif', 'ome.tiff').values[0]}"
         )
         im_dict["DAPI"] = tifffile.imread(dapi_f) * mask
+        im_dict["dst_register"] = tifffile.imread(dst_dapi_f) * mask
+        im_dict["src_register"] = tifffile.imread(src_dapi_f) * mask
 
         output_f = output_dir / id / f"{id}.ome.tiff"
         output_f.parent.mkdir(parents=True, exist_ok=True)
         if output_f.exists():
             os.remove(output_f)
         export_ometiff_pyramid_from_dict(
-            im_dict, str(output_f), ["DAPI"] + marker_df.marker_name.tolist()
+            im_dict,
+            str(output_f),
+            ["dst_register", "src_register", "DAPI"] + marker_df.marker_name.tolist(),
         )
+
+
+def get_max_dst_dapi_index():
+    """
+    Get the maximum index of dst DAPI channel.
+    """
+    valis_dir = Path(
+        "/mnt/nfs/home/wenruiwu/projects/bidmc-jiang-rcc/output/data/20250112_alignment_valis/valis"
+    )
+    all_index = []
+    all_dir = list(valis_dir.glob("*/"))
+    for region_dir in tqdm(
+        all_dir,
+        desc="Get max dst dapi index",
+        bar_format=TQDM_FORMAT,
+    ):
+        file_names = [
+            f.name
+            for f in (region_dir / "registered_non_rigid/ometiff").glob("*.ome.tiff")
+        ]
+        dapi_index = [
+            re.search(r"dst_.+Ch1Cy(\d+)", name).group(1)
+            for name in file_names
+            if re.search(r"dst_.+Ch1Cy(\d+)", name)
+        ]
+        dapi_index = [int(i) for i in dapi_index]
+        all_index += dapi_index
+    dapi_index, n = np.unique(all_index, return_counts=True)
+    max_dapi = dapi_index[n == len(all_dir)].max()
+    return max_dapi
 
 
 ###############################################################################
